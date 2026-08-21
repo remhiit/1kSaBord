@@ -13,9 +13,13 @@ navigator.serviceWorker.register('./sw.js');
 
 | Événement | Rôle |
 |---|---|
-| `install` | Ouvre le cache `CACHE_NAME` et y précharge `ASSETS` (`./`, `./index.html`, `./app.js`), puis `skipWaiting()` |
-| `activate` | Purge les anciens caches de l'application, puis `clients.claim()` |
+| `install` | Ouvre le cache `CACHE_NAME` et y précharge `ASSETS` (`./`, `./index.html`, `./app.js`) |
+| `activate` | Purge les anciens caches de l'application |
 | `fetch` | Stratégie **cache-first** : la réponse en cache si elle existe, sinon le réseau |
+
+`skipWaiting()` et `clients.claim()` sont appelés **en dehors** de
+`event.waitUntil(...)`, donc de façon synchrone : ils s'exécutent sans
+attendre la fin du préchargement ni celle de la purge.
 
 ## Purge des caches : préfixe obligatoire
 
@@ -30,14 +34,28 @@ leur préfixe.
 
 ```js
 const CACHE_NAME = 'ksabord-v1';
-const PREFIXE_CACHE = CACHE_NAME.replace(/-v[^-]*$/, '') + '-'; // « ksabord- »
+const PREFIXE_CACHE = CACHE_NAME.replace(/-v[^-]*$/, '') + '-';
 
 keys.filter(k => k.startsWith(PREFIXE_CACHE) && k !== CACHE_NAME)
 ```
 
+`PREFIXE_CACHE` vaut donc `ksabord-`.
+
 Le préfixe est **dérivé** de `CACHE_NAME` (partie avant le `-v` final)
 et non réécrit en dur : un changement de version (`ksabord-v2`) suffit,
 il n'y a qu'une seule constante à modifier.
+
+### Contraintes de nommage
+
+Deux règles à respecter en modifiant `CACHE_NAME` :
+
+1. **Format `<prefixe>-v<n>`**, `<n>` sans tiret. Si la regex ne matche
+   pas (`ksabord-v1-beta`, `ksabord`), le préfixe retombe sur
+   `CACHE_NAME + '-'` : la purge des anciennes versions devient
+   inopérante — mais elle reste sans danger pour les autres apps, le
+   préfixe dégradé étant plus restrictif, jamais plus large.
+2. **Préfixe unique sur l'origine.** Une future app dont le cache
+   s'appellerait `ksabord-pro-v1` serait purgée par 1000 Sabords.
 
 Effet du filtre :
 
@@ -54,3 +72,5 @@ Le dépôt n'a pas d'infrastructure de test JS pour `sw.js` (`jsNodeTest`
 couvre le domaine Kotlin). La vérification est manuelle : installer deux
 des trois PWA, ouvrir la seconde, puis contrôler dans DevTools →
 Application → Cache Storage que les deux caches coexistent.
+
+-
